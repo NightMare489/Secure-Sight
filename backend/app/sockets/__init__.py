@@ -1,0 +1,3 @@
+"""
+SocketIO Events Package.
+"""

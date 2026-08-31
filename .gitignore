@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# YOLO model weights
+*.pt
+*.onnx
+*.engine
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# Environment variables
+.env.local
+.env.production
+
+# Snapshots
+snapshots/
+
+# Test coverage
+htmlcov/
+.coverage
