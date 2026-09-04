@@ -13,7 +13,7 @@ from app.utils.exceptions import (
     NotFoundError,
     PipelineAlreadyRunningError,
     PipelineNotRunningError,
-    SchoolCVError,
+    SecureSightError,
     ValidationError,
 )
 
@@ -55,8 +55,8 @@ def handle_pipeline_not_running(error: PipelineNotRunningError):
     return jsonify({"error": error.message, "code": error.code}), 404
 
 
-@errors_bp.app_errorhandler(SchoolCVError)
-def handle_app_error(error: SchoolCVError):
+@errors_bp.app_errorhandler(SecureSightError)
+def handle_app_error(error: SecureSightError):
     """Handle generic application errors."""
     return jsonify({"error": error.message, "code": error.code}), 500
 

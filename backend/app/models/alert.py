@@ -8,7 +8,7 @@ a snapshot image path.
 
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base, UUIDMixin
@@ -48,7 +48,11 @@ class Alert(Base, UUIDMixin):
     event_type = Column(String(20), nullable=False)  # ENTER, EXIT, PRESENT
     timestamp = Column(DateTime, nullable=False)
     snapshot_path = Column(String(500), nullable=True)
+    clip_path = Column(String(500), nullable=True)
     metadata_json = Column(Text, nullable=True, default="{}")
+    acknowledged = Column(Boolean, nullable=False, default=False)
+    acknowledged_at = Column(DateTime, nullable=True)
+    acknowledgement_note = Column(Text, nullable=True)
 
     # Relationships
     zone = relationship("Zone", back_populates="alerts")

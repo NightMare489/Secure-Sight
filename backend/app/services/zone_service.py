@@ -79,6 +79,10 @@ class ZoneService:
             color=data.color,
             alert_enabled=data.alert_enabled,
             is_active=data.is_active,
+            rule_type=data.rule_type,
+            dwell_threshold_seconds=data.dwell_threshold_seconds,
+            occupancy_limit=data.occupancy_limit,
+            alert_cooldown_seconds=data.alert_cooldown_seconds,
         )
 
         zone = self._zone_repo.create(zone)
@@ -148,7 +152,11 @@ class ZoneService:
                 name=z.name,
                 polygon=z.get_polygon(),
                 color=z.color,
-                is_active=z.is_active,
+                is_active=z.is_active and z.alert_enabled,
+                rule_type=z.rule_type,
+                dwell_threshold_seconds=z.dwell_threshold_seconds,
+                occupancy_limit=z.occupancy_limit,
+                alert_cooldown_seconds=z.alert_cooldown_seconds,
             )
             for z in zones
         ]
@@ -163,6 +171,10 @@ class ZoneService:
             color=zone.color,
             alert_enabled=zone.alert_enabled,
             is_active=zone.is_active,
+            rule_type=zone.rule_type,
+            dwell_threshold_seconds=zone.dwell_threshold_seconds,
+            occupancy_limit=zone.occupancy_limit,
+            alert_cooldown_seconds=zone.alert_cooldown_seconds,
             created_at=zone.created_at,
             updated_at=zone.updated_at,
         )

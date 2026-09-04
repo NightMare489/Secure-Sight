@@ -11,6 +11,7 @@ from flask import Blueprint
 from app.api.v1.cameras import cameras_bp
 from app.api.v1.zones import zones_bp
 from app.api.v1.alerts import alerts_bp
+from app.api.v1.copilot import copilot_bp
 
 v1_bp = Blueprint("v1", __name__, url_prefix="/api/v1")
 
@@ -18,3 +19,4 @@ v1_bp = Blueprint("v1", __name__, url_prefix="/api/v1")
 v1_bp.register_blueprint(cameras_bp)
 v1_bp.register_blueprint(zones_bp)
 v1_bp.register_blueprint(alerts_bp)
+v1_bp.register_blueprint(copilot_bp)

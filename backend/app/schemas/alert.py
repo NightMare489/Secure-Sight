@@ -25,8 +25,12 @@ class AlertResponse(BaseModel):
     event_type: str
     timestamp: datetime
     snapshot_path: Optional[str] = None
+    clip_path: Optional[str] = None
     zone_name: str = ""
     camera_name: str = ""
+    acknowledged: bool = False
+    acknowledged_at: Optional[datetime] = None
+    acknowledgement_note: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -46,9 +50,17 @@ class AlertFilter(BaseModel):
     camera_id: Optional[str] = None
     zone_id: Optional[str] = None
     event_type: Optional[str] = Field(
-        None, pattern=r"^(ENTER|EXIT|PRESENT)$"
+        None, pattern=r"^(ENTER|EXIT|PRESENT|LOITERING|OCCUPANCY_LIMIT)$"
     )
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     page: int = Field(default=1, ge=1)
     per_page: int = Field(default=50, ge=1, le=200)
+    acknowledged: Optional[bool] = None
+
+
+class AlertAcknowledge(BaseModel):
+    """Operator acknowledgement for an alert."""
+
+    acknowledged: bool = True
+    note: Optional[str] = Field(None, max_length=2000)

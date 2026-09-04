@@ -8,8 +8,8 @@ All custom exceptions inherit from a common base for easy catching.
 from __future__ import annotations
 
 
-class SchoolCVError(Exception):
-    """Base exception for all SchoolCV application errors."""
+class SecureSightError(Exception):
+    """Base exception for all Secure Sight application errors."""
 
     def __init__(self, message: str = "", code: str = "UNKNOWN_ERROR") -> None:
         self.message = message
@@ -21,7 +21,7 @@ class SchoolCVError(Exception):
 # Core Engine Exceptions
 # ---------------------------------------------------------------------------
 
-class DetectorError(SchoolCVError):
+class DetectorError(SecureSightError):
     """Raised when the detection engine encounters an error."""
 
     def __init__(self, message: str = "Detection engine error") -> None:
@@ -39,7 +39,7 @@ class ModelLoadError(DetectorError):
         self.model_path = model_path
 
 
-class TrackerError(SchoolCVError):
+class TrackerError(SecureSightError):
     """Raised when the tracking engine encounters an error."""
 
     def __init__(self, message: str = "Tracker error") -> None:
@@ -50,7 +50,7 @@ class TrackerError(SchoolCVError):
 # Video Source Exceptions
 # ---------------------------------------------------------------------------
 
-class VideoSourceError(SchoolCVError):
+class VideoSourceError(SecureSightError):
     """Raised when a video source cannot be opened or read."""
 
     def __init__(self, source: str, reason: str = "") -> None:
@@ -79,7 +79,7 @@ class VideoSourceReadError(VideoSourceError):
 # Pipeline Exceptions
 # ---------------------------------------------------------------------------
 
-class PipelineError(SchoolCVError):
+class PipelineError(SecureSightError):
     """Raised when the detection pipeline encounters an error."""
 
     def __init__(self, message: str = "Pipeline error") -> None:
@@ -106,7 +106,7 @@ class PipelineNotRunningError(PipelineError):
 # Data Layer Exceptions
 # ---------------------------------------------------------------------------
 
-class NotFoundError(SchoolCVError):
+class NotFoundError(SecureSightError):
     """Raised when a requested resource is not found."""
 
     def __init__(self, resource_type: str, resource_id: str) -> None:
@@ -118,7 +118,7 @@ class NotFoundError(SchoolCVError):
         self.resource_id = resource_id
 
 
-class ValidationError(SchoolCVError):
+class ValidationError(SecureSightError):
     """Raised when input validation fails."""
 
     def __init__(self, message: str, field: str = "") -> None:
@@ -130,7 +130,7 @@ class ValidationError(SchoolCVError):
         super().__init__(detail, code="VALIDATION_ERROR")
 
 
-class DuplicateError(SchoolCVError):
+class DuplicateError(SecureSightError):
     """Raised when a duplicate resource is detected."""
 
     def __init__(self, resource_type: str, identifier: str) -> None:

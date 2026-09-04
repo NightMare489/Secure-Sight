@@ -23,6 +23,16 @@ _SQLITE_COLUMNS: dict[str, dict[str, str]] = {
         "global_person_id": "VARCHAR(36)",
         "association_confidence": "FLOAT",
         "association_method": "VARCHAR(30)",
+        "acknowledged": "BOOLEAN NOT NULL DEFAULT 0",
+        "acknowledged_at": "DATETIME",
+        "acknowledgement_note": "TEXT",
+        "clip_path": "VARCHAR(500)",
+    },
+    "zones": {
+        "rule_type": "VARCHAR(20) NOT NULL DEFAULT 'intrusion'",
+        "dwell_threshold_seconds": "INTEGER",
+        "occupancy_limit": "INTEGER",
+        "alert_cooldown_seconds": "INTEGER NOT NULL DEFAULT 60",
     },
 }
 

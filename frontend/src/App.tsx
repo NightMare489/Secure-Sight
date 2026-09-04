@@ -6,7 +6,7 @@
 
 import { Outlet, NavLink } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { LayoutDashboard, AlertTriangle, Shield } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, Shield, Bot } from 'lucide-react';
 import './index.css';
 import './styles/dashboard.css';
 
@@ -19,7 +19,7 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <Shield size={24} />
-          SchoolCV
+          Secure Sight
         </div>
 
         <nav className="sidebar-nav">
@@ -31,10 +31,14 @@ function App() {
             <AlertTriangle size={18} />
             Alerts
           </NavLink>
+          <NavLink to="/copilot" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Bot size={18} />
+            Analytics Copilot
+          </NavLink>
         </nav>
 
         <div style={{ marginTop: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-          SchoolCV v0.1.0
+          Secure Sight v0.1.0
         </div>
       </aside>
 

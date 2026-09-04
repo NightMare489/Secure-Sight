@@ -42,6 +42,7 @@ dist/
 
 # Snapshots
 snapshots/
+incident_clips/
 
 # Test coverage
 htmlcov/

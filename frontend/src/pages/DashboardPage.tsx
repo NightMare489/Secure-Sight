@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, Plus, Shield, AlertTriangle, Activity } from 'lucide-react';
 import { useCameraStore } from '../store/cameraStore';
 import { useAlertStore } from '../store/alertStore';
-import { useAlertSocket } from '../hooks/useWebSocket';
+import { useAlertSocket, useCameraWall } from '../hooks/useWebSocket';
 import toast from 'react-hot-toast';
 import { API_BASE_URL } from '../api/client';
 import type { CameraCreate } from '../types/camera';
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const { cameras, isLoading, fetchCameras, addCamera } = useCameraStore();
   const { recentAlerts, fetchRecent, addRealtimeAlert } = useAlertStore();
   const [showAddModal, setShowAddModal] = useState(false);
+  const runningCameraIds = cameras.filter((camera) => camera.pipeline_status === 'RUNNING').map((camera) => camera.id);
+  const liveFrames = useCameraWall(runningCameraIds);
 
   // Real-time alerts
   useAlertSocket((data) => {
@@ -35,8 +37,12 @@ export default function DashboardPage() {
       event_type: data.event_type,
       timestamp: new Date(data.timestamp * 1000).toISOString(),
       snapshot_path: null,
+      clip_path: null,
       zone_name: data.zone_name,
       camera_name: '',
+      acknowledged: false,
+      acknowledged_at: null,
+      acknowledgement_note: null,
     });
 
     if (data.event_type === 'ENTER') {
@@ -111,6 +117,7 @@ export default function DashboardPage() {
             <CameraCard
               key={camera.id}
               camera={camera}
+              liveFrame={liveFrames[camera.id]}
               onClick={() => navigate(`/cameras/${camera.id}`)}
             />
           ))}
@@ -136,7 +143,7 @@ export default function DashboardPage() {
   );
 }
 
-function CameraCard({ camera, onClick }: { camera: CameraType; onClick: () => void }) {
+function CameraCard({ camera, onClick, liveFrame }: { camera: CameraType; onClick: () => void; liveFrame?: { frame: string; detectionsCount: number } }) {
   const [hasError, setHasError] = useState(false);
   
   const statusBadge = {
@@ -153,7 +160,7 @@ function CameraCard({ camera, onClick }: { camera: CameraType; onClick: () => vo
   return (
     <div className="glass-card camera-card" onClick={onClick}>
       <div className="camera-card-preview">
-        {!hasError ? (
+        {liveFrame ? <img src={liveFrame.frame} alt={`${camera.name} live stream`} /> : !hasError ? (
           <img
             src={thumbnailUrl}
             alt={camera.name}
@@ -177,6 +184,7 @@ function CameraCard({ camera, onClick }: { camera: CameraType; onClick: () => vo
           <span className="camera-card-zones">
             <Shield size={12} /> {camera.zone_count} zone{camera.zone_count !== 1 ? 's' : ''}
           </span>
+          {liveFrame && <span className="camera-card-zones"><Activity size={12} /> {liveFrame.detectionsCount} people</span>}
         </div>
       </div>
     </div>

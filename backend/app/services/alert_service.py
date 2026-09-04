@@ -63,8 +63,7 @@ class AlertService:
         Returns:
             AlertResponse if the event was persisted, None if deduplicated.
         """
-        # Only persist ENTER and EXIT events (PRESENT events are informational heartbeats)
-        if event.event_type not in (ZoneEventType.ENTER, ZoneEventType.EXIT):
+        if event.event_type == ZoneEventType.PRESENT:
             return None
 
         # Deduplication check
@@ -79,9 +78,9 @@ class AlertService:
 
         self._recent_events[dedup_key] = now
 
-        # Save snapshot if available (only for ENTER events to save disk space)
+        # Save a snapshot for actionable events; exits do not need one.
         snapshot_path = None
-        if event.event_type == ZoneEventType.ENTER and event.snapshot is not None and self._snapshots_dir is not None:
+        if event.event_type != ZoneEventType.EXIT and event.snapshot is not None and self._snapshots_dir is not None:
             snapshot_path = self._save_snapshot(
                 event.snapshot, camera_id, event.zone_id
             )
@@ -101,13 +100,12 @@ class AlertService:
 
         alert = self._alert_repo.create(alert)
 
-        action_word = "entered" if event.event_type == ZoneEventType.ENTER else "exited"
         logger.info(
-            "Alert created: Person %d %s zone '%s' on camera %s",
-            event.tracker_id,
-            action_word,
+            "Alert created: %s in zone '%s' on camera %s (tracker %d)",
+            event.event_type.value,
             event.zone_name,
             camera_id,
+            event.tracker_id,
         )
 
         return self._to_response(alert)
@@ -130,6 +128,7 @@ class AlertService:
             end_time=filters.end_time,
             page=filters.page,
             per_page=filters.per_page,
+            acknowledged=filters.acknowledged,
         )
 
         return AlertListResponse(
@@ -152,6 +151,26 @@ class AlertService:
         """Get the most recent alerts."""
         alerts = self._alert_repo.get_recent(limit)
         return [self._to_response(a) for a in alerts]
+
+    def acknowledge(self, alert_id: str, acknowledged: bool, note: str | None) -> AlertResponse:
+        """Mark an alert as handled or return it to the active queue."""
+        from app.utils.exceptions import NotFoundError
+
+        alert = self._alert_repo.get_by_id(alert_id)
+        if alert is None:
+            raise NotFoundError("Alert", alert_id)
+        alert.acknowledged = acknowledged
+        alert.acknowledged_at = datetime.now(timezone.utc) if acknowledged else None
+        alert.acknowledgement_note = note if acknowledged else None
+        return self._to_response(self._alert_repo.update(alert))
+
+    def set_clip_path(self, alert_id: str, clip_path: str) -> AlertResponse | None:
+        """Attach the completed incident clip to its persisted alert."""
+        alert = self._alert_repo.get_by_id(alert_id)
+        if alert is None:
+            return None
+        alert.clip_path = clip_path
+        return self._to_response(self._alert_repo.update(alert))
 
     def _save_snapshot(
         self, frame: np.ndarray, camera_id: str, zone_id: str
@@ -193,8 +212,12 @@ class AlertService:
             event_type=alert.event_type,
             timestamp=alert.timestamp,
             snapshot_path=alert.snapshot_path,
+            clip_path=alert.clip_path,
             zone_name=zone_name,
             camera_name=camera_name,
+            acknowledged=alert.acknowledged,
+            acknowledged_at=alert.acknowledged_at,
+            acknowledgement_note=alert.acknowledgement_note,
         )
 
     def cleanup_dedup_cache(self) -> None:

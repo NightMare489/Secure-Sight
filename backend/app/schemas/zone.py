@@ -7,7 +7,7 @@ DTOs for zone CRUD operations and API responses.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,6 +22,10 @@ class ZoneCreate(BaseModel):
     color: str = Field(default="#FF0000", pattern=r"^#[0-9A-Fa-f]{6}$")
     alert_enabled: bool = Field(default=True)
     is_active: bool = Field(default=True)
+    rule_type: Literal["intrusion", "loitering", "occupancy_limit"] = "intrusion"
+    dwell_threshold_seconds: Optional[int] = Field(None, ge=1, le=86400)
+    occupancy_limit: Optional[int] = Field(None, ge=1, le=10000)
+    alert_cooldown_seconds: int = Field(default=60, ge=0, le=86400)
 
     @field_validator("polygon_points")
     @classmethod
@@ -51,6 +55,10 @@ class ZoneUpdate(BaseModel):
     color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     alert_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
+    rule_type: Optional[Literal["intrusion", "loitering", "occupancy_limit"]] = None
+    dwell_threshold_seconds: Optional[int] = Field(None, ge=1, le=86400)
+    occupancy_limit: Optional[int] = Field(None, ge=1, le=10000)
+    alert_cooldown_seconds: Optional[int] = Field(None, ge=0, le=86400)
 
     @field_validator("polygon_points")
     @classmethod
@@ -87,6 +95,10 @@ class ZoneResponse(BaseModel):
     color: str
     alert_enabled: bool
     is_active: bool
+    rule_type: str
+    dwell_threshold_seconds: Optional[int] = None
+    occupancy_limit: Optional[int] = None
+    alert_cooldown_seconds: int
     created_at: datetime
     updated_at: datetime
 

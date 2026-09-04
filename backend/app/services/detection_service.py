@@ -28,6 +28,8 @@ from app.core.reid import PersonReIdentifier
 from app.core.tracker import PersonTracker
 from app.core.video_source import VideoSourceFactory
 from app.core.zone_analyzer import ZoneAnalyzer
+from app.core.interfaces import ZoneEventType
+from app.services.incident_clip_recorder import IncidentClipRecorder
 from app.utils.exceptions import (
     PipelineAlreadyRunningError,
     PipelineNotRunningError,
@@ -55,15 +57,27 @@ class _SocketIOCallback(IFrameCallback):
         frame_quality: int = 70,
         alert_service=None,
         app=None,
+        clips_dir=None,
     ) -> None:
         self._camera_id = camera_id
         self._socketio = socketio
         self._frame_quality = frame_quality
         self._alert_service = alert_service
         self._app = app
+        self._clip_recorder = IncidentClipRecorder(
+            camera_id, clips_dir, 30, self._save_clip_path
+        ) if clips_dir is not None else None
+
+    def _save_clip_path(self, alert_id: str, clip_path: str) -> None:
+        if self._alert_service is None or self._app is None:
+            return
+        with self._app.app_context():
+            self._alert_service.set_clip_path(alert_id, clip_path)
 
     def on_frame_processed(self, result: PipelineResult) -> None:
         """Broadcast annotated frame and zone events."""
+        if self._clip_recorder is not None:
+            self._clip_recorder.capture(result.detection_result.annotated_frame)
         # Encode frame as JPEG
         frame_data = None
         if result.detection_result.annotated_frame is not None:
@@ -126,9 +140,15 @@ class _SocketIOCallback(IFrameCallback):
             if self._alert_service is not None and self._app is not None:
                 try:
                     with self._app.app_context():
-                        self._alert_service.process_zone_event(
+                        alert = self._alert_service.process_zone_event(
                             event, self._camera_id
                         )
+                        if (
+                            alert is not None
+                            and self._clip_recorder is not None
+                            and event.event_type != ZoneEventType.EXIT
+                        ):
+                            self._clip_recorder.start_incident(alert.id, event.timestamp)
                 except Exception as e:
                     logger.error("Failed to persist alert: %s", e)
 
@@ -243,6 +263,7 @@ class DetectionServiceManager:
                     frame_quality=self._config.stream.frame_quality,
                     alert_service=alert_service,
                     app=self._app,
+                    clips_dir=self._config.clips_dir,
                 )
 
             # Create pipeline

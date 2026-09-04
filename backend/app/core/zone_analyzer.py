@@ -47,6 +47,10 @@ class _ZoneState:
         "sv_zone",
         "current_occupants",
         "occupant_identities",
+        "entered_at",
+        "loitering_alerted",
+        "occupancy_limit_active",
+        "last_rule_alert_at",
     )
 
     def __init__(
@@ -58,6 +62,10 @@ class _ZoneState:
         self.sv_zone = sv_zone
         self.current_occupants: set[int] = set()
         self.occupant_identities: dict[int, tuple[str | None, float | None, str | None]] = {}
+        self.entered_at: dict[int, float] = {}
+        self.loitering_alerted: set[int] = set()
+        self.occupancy_limit_active = False
+        self.last_rule_alert_at: dict[str, float] = {}
 
 
 class ZoneAnalyzer(IZoneAnalyzer):
@@ -112,19 +120,20 @@ class ZoneAnalyzer(IZoneAnalyzer):
         """
         events: list[ZoneEvent] = []
         occupancy: dict[str, set[int]] = {}
+        now = time.time()
 
         if not self._zone_states or not detections:
             # No zones or no detections — clear all zone occupants
             for state in self._zone_states.values():
                 # Emit EXIT events for anyone who was inside
-                for tracker_id in state.current_occupants:
+                for tracker_id in state.current_occupants if state.definition.rule_type == "intrusion" else ():
                     events.append(
                         ZoneEvent(
                             zone_id=state.definition.zone_id,
                             zone_name=state.definition.name,
                             tracker_id=tracker_id,
                             event_type=ZoneEventType.EXIT,
-                            timestamp=time.time(),
+                            timestamp=now,
                             frame_number=frame_number,
                             snapshot=frame.copy() if frame is not None else None,
                             global_person_id=state.occupant_identities.get(
@@ -140,6 +149,10 @@ class ZoneAnalyzer(IZoneAnalyzer):
                     )
                 state.current_occupants.clear()
                 state.occupant_identities.clear()
+                state.entered_at.clear()
+                state.loitering_alerted.clear()
+                state.occupancy_limit_active = False
+                state.last_rule_alert_at.clear()
                 occupancy[state.definition.zone_id] = set()
             return events, occupancy
 
@@ -175,47 +188,48 @@ class ZoneAnalyzer(IZoneAnalyzer):
             exited = previous_inside - current_inside
             still_inside = current_inside & previous_inside
 
-            # Emit ENTER events
-            for tracker_id in entered:
-                global_person_id, confidence, method = identities_by_tracker.get(
-                    tracker_id, (None, None, None)
-                )
-                events.append(
-                    ZoneEvent(
-                        zone_id=zone_id,
-                        zone_name=state.definition.name,
-                        tracker_id=tracker_id,
-                        event_type=ZoneEventType.ENTER,
-                        timestamp=time.time(),
-                        frame_number=frame_number,
-                        snapshot=frame.copy(),
-                        global_person_id=global_person_id,
-                        association_confidence=confidence,
-                        association_method=method,
+            # Intrusion zones alert on the boundary transition. Loitering and
+            # occupancy zones use their own rules below and must not create a
+            # premature ENTER/EXIT incident.
+            if state.definition.rule_type == "intrusion":
+                for tracker_id in entered:
+                    global_person_id, confidence, method = identities_by_tracker.get(
+                        tracker_id, (None, None, None)
                     )
-                )
-
-            # Emit EXIT events
-            for tracker_id in exited:
-                global_person_id, confidence, method = state.occupant_identities.get(
-                    tracker_id, (None, None, None)
-                )
-                events.append(
-                    ZoneEvent(
-                        zone_id=zone_id,
-                        zone_name=state.definition.name,
-                        tracker_id=tracker_id,
-                        event_type=ZoneEventType.EXIT,
-                        timestamp=time.time(),
-                        frame_number=frame_number,
-                        global_person_id=global_person_id,
-                        association_confidence=confidence,
-                        association_method=method,
+                    events.append(
+                        ZoneEvent(
+                            zone_id=zone_id,
+                            zone_name=state.definition.name,
+                            tracker_id=tracker_id,
+                            event_type=ZoneEventType.ENTER,
+                            timestamp=now,
+                            frame_number=frame_number,
+                            snapshot=frame.copy(),
+                            global_person_id=global_person_id,
+                            association_confidence=confidence,
+                            association_method=method,
+                        )
                     )
-                )
+                for tracker_id in exited:
+                    global_person_id, confidence, method = state.occupant_identities.get(
+                        tracker_id, (None, None, None)
+                    )
+                    events.append(
+                        ZoneEvent(
+                            zone_id=zone_id,
+                            zone_name=state.definition.name,
+                            tracker_id=tracker_id,
+                            event_type=ZoneEventType.EXIT,
+                            timestamp=now,
+                            frame_number=frame_number,
+                            global_person_id=global_person_id,
+                            association_confidence=confidence,
+                            association_method=method,
+                        )
+                    )
 
             # Emit PRESENT events (less frequently — every 30 frames)
-            if frame_number % 30 == 0:
+            if state.definition.rule_type == "intrusion" and frame_number % 30 == 0:
                 for tracker_id in still_inside:
                     global_person_id, confidence, method = identities_by_tracker.get(
                         tracker_id,
@@ -229,16 +243,77 @@ class ZoneAnalyzer(IZoneAnalyzer):
                             zone_name=state.definition.name,
                             tracker_id=tracker_id,
                             event_type=ZoneEventType.PRESENT,
-                        timestamp=time.time(),
-                        frame_number=frame_number,
-                        global_person_id=global_person_id,
-                        association_confidence=confidence,
-                        association_method=method,
+                            timestamp=now,
+                            frame_number=frame_number,
+                            global_person_id=global_person_id,
+                            association_confidence=confidence,
+                            association_method=method,
+                        )
                     )
-                )
+
+            # Loitering is a one-time alert per uninterrupted stay. The
+            # configured cooldown becomes relevant after the person exits and
+            # enters again, while this set prevents an alert each frame.
+            if state.definition.rule_type == "loitering":
+                threshold = state.definition.dwell_threshold_seconds or 60
+                for tracker_id in still_inside:
+                    if (
+                        tracker_id not in state.loitering_alerted
+                        and now - state.entered_at.get(tracker_id, now) >= threshold
+                        and now - state.last_rule_alert_at.get(f"loitering:{tracker_id}", 0) >= state.definition.alert_cooldown_seconds
+                    ):
+                        global_person_id, confidence, method = identities_by_tracker.get(
+                            tracker_id, state.occupant_identities.get(tracker_id, (None, None, None))
+                        )
+                        events.append(
+                            ZoneEvent(
+                                zone_id=zone_id,
+                                zone_name=state.definition.name,
+                                tracker_id=tracker_id,
+                                event_type=ZoneEventType.LOITERING,
+                                timestamp=now,
+                                frame_number=frame_number,
+                                snapshot=frame.copy(),
+                                global_person_id=global_person_id,
+                                association_confidence=confidence,
+                                association_method=method,
+                            )
+                        )
+                        state.loitering_alerted.add(tracker_id)
+                        state.last_rule_alert_at[f"loitering:{tracker_id}"] = now
+
+            # Trigger only when crossing the configured limit, then re-arm
+            # after occupancy drops back below it.
+            if state.definition.rule_type == "occupancy_limit":
+                limit = state.definition.occupancy_limit or 1
+                over_limit = len(current_inside) > limit
+                if (
+                    over_limit
+                    and not state.occupancy_limit_active
+                    and now - state.last_rule_alert_at.get("occupancy", 0) >= state.definition.alert_cooldown_seconds
+                ):
+                    events.append(
+                        ZoneEvent(
+                            zone_id=zone_id,
+                            zone_name=state.definition.name,
+                            tracker_id=0,
+                            event_type=ZoneEventType.OCCUPANCY_LIMIT,
+                            timestamp=now,
+                            frame_number=frame_number,
+                            snapshot=frame.copy(),
+                        )
+                    )
+                    state.last_rule_alert_at["occupancy"] = now
+                state.occupancy_limit_active = over_limit
 
             # Update state
             state.current_occupants = current_inside
+            for tracker_id in entered:
+                state.entered_at[tracker_id] = now
+            for tracker_id in exited:
+                state.entered_at.pop(tracker_id, None)
+                state.loitering_alerted.discard(tracker_id)
+                state.last_rule_alert_at.pop(f"loitering:{tracker_id}", None)
             state.occupant_identities = {
                 tracker_id: identities_by_tracker.get(
                     tracker_id, state.occupant_identities.get(
@@ -291,15 +366,20 @@ class ZoneAnalyzer(IZoneAnalyzer):
             # Preserve existing occupancy if zone already existed
             existing_occupants: set[int] = set()
             if zone_def.zone_id in self._zone_states:
-                existing_occupants = self._zone_states[
-                    zone_def.zone_id
-                ].current_occupants
+                previous_state = self._zone_states[zone_def.zone_id]
+                existing_occupants = previous_state.current_occupants
 
             state = _ZoneState(
                 definition=zone_def,
                 sv_zone=sv_zone,
             )
             state.current_occupants = existing_occupants
+            if zone_def.zone_id in self._zone_states:
+                state.occupant_identities = deepcopy(previous_state.occupant_identities)
+                state.entered_at = deepcopy(previous_state.entered_at)
+                state.loitering_alerted = deepcopy(previous_state.loitering_alerted)
+                state.occupancy_limit_active = previous_state.occupancy_limit_active
+                state.last_rule_alert_at = deepcopy(previous_state.last_rule_alert_at)
             new_states[zone_def.zone_id] = state
 
         self._zone_states = new_states

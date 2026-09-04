@@ -72,6 +72,14 @@ class StreamConfig:
 
 
 @dataclass(frozen=True)
+class GeminiConfig:
+    """Optional Gemini integration for the read-only analytics copilot."""
+
+    api_key: str = ""
+    model: str = "gemini-3.5-flash-lite"
+
+
+@dataclass(frozen=True)
 class DatabaseConfig:
     """Configuration for database connection."""
 
@@ -81,7 +89,7 @@ class DatabaseConfig:
     @staticmethod
     def default_uri(base_dir: Path) -> str:
         """Generate the default SQLite URI based on the project base directory."""
-        db_path = base_dir / "data" / "schoolcv.db"
+        db_path = base_dir / "data" / "securesight.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_path}"
 
@@ -109,6 +117,7 @@ class AppConfig:
     )
     reid: ReIDConfig = field(default_factory=ReIDConfig)
     stream: StreamConfig = field(default_factory=StreamConfig)
+    gemini: GeminiConfig = field(default_factory=GeminiConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
 
     # Paths
@@ -116,6 +125,7 @@ class AppConfig:
         default_factory=lambda: Path(__file__).resolve().parent.parent
     )
     snapshots_dir: Path = field(default=None)  # type: ignore[assignment]
+    clips_dir: Path = field(default=None)  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Compute derived paths after initialization."""
@@ -125,6 +135,9 @@ class AppConfig:
                 self, "snapshots_dir", self.base_dir / "snapshots"
             )
         self.snapshots_dir.mkdir(parents=True, exist_ok=True)
+        if self.clips_dir is None:
+            object.__setattr__(self, "clips_dir", self.base_dir / "incident_clips")
+        self.clips_dir.mkdir(parents=True, exist_ok=True)
 
         # Set default database URI if not explicitly provided
         if not self.database.uri:
@@ -193,5 +206,9 @@ class AppConfig:
             stream=StreamConfig(
                 frame_quality=int(os.getenv("STREAM_QUALITY", "70")),
                 max_fps=int(os.getenv("STREAM_MAX_FPS", "30")),
+            ),
+            gemini=GeminiConfig(
+                api_key=os.getenv("GEMINI_API_KEY", ""),
+                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
             ),
         )

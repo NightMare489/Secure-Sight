@@ -4,7 +4,7 @@
  * Shows live camera feed, zone editor, zone list, and alerts.
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type SyntheticEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Play, Square, Plus, Trash2, Shield, AlertTriangle, Edit2, Eye, Pencil,
@@ -16,7 +16,7 @@ import { useCameraStore } from '../store/cameraStore';
 import { useZoneStore } from '../store/zoneStore';
 import { useStreamSocket } from '../hooks/useWebSocket';
 import { API_BASE_URL } from '../api/client';
-import type { ZoneCreate } from '../types/zone';
+import type { Zone, ZoneCreate } from '../types/zone';
 import { formatHomography, parseHomography } from '../utils/homography';
 
 type EditorMode = 'view' | 'draw';
@@ -25,7 +25,7 @@ export default function CameraDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { selectedCamera, fetchCamera, startPipeline, stopPipeline, removeCamera, updateCamera } = useCameraStore();
-  const { zones, fetchZones, addZone, removeZone } = useZoneStore();
+  const { zones, fetchZones, addZone, updateZone, removeZone } = useZoneStore();
 
   const [streamFrame, setStreamFrame] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>('view');
@@ -36,8 +36,10 @@ export default function CameraDetailPage() {
   const [overlapGroup, setOverlapGroup] = useState('');
   const [homography, setHomography] = useState('');
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [editingZone, setEditingZone] = useState<Zone | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const [streamAspectRatio, setStreamAspectRatio] = useState(16 / 9);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 450 });
 
   // Fetch camera and zones
@@ -60,13 +62,20 @@ export default function CameraDetailPage() {
     const updateSize = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setContainerSize({ width: rect.width, height: rect.width * (9 / 16) });
+        setContainerSize({ width: rect.width, height: rect.width / streamAspectRatio });
       }
     };
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  }, [streamAspectRatio]);
+
+  const handleStreamLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = event.currentTarget;
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      setStreamAspectRatio(naturalWidth / naturalHeight);
+    }
+  };
 
   // Stream socket
   const handleFrame = useCallback((data: any) => {
@@ -130,6 +139,13 @@ export default function CameraDetailPage() {
     } catch (err: any) {
       toast.error('Failed to delete zone');
     }
+  };
+
+  const moveZoneVertex = async (zone: Zone, vertexIndex: number, x: number, y: number) => {
+    const polygon_points = zone.polygon_points.map((point, index) => index === vertexIndex
+      ? [Math.max(0, Math.min(1, x / containerSize.width)), Math.max(0, Math.min(1, y / containerSize.height))]
+      : point);
+    try { await updateZone(zone.id, { polygon_points }); } catch { toast.error('Failed to update zone boundary'); }
   };
 
   const handleDeleteCamera = async () => {
@@ -209,17 +225,19 @@ export default function CameraDetailPage() {
       {/* Main Layout */}
       <div className="camera-detail-layout">
         {/* Stream + Zone Editor */}
-        <div ref={containerRef} className="camera-stream-container glass-card" style={{ position: 'relative' }}>
+        <div ref={containerRef} className="camera-stream-container glass-card" style={{ position: 'relative', alignSelf: 'start' }}>
           {streamFrame ? (
             <img
               src={streamFrame}
               alt="Camera stream"
+              onLoad={handleStreamLoad}
               style={{ width: '100%', height: containerSize.height, objectFit: 'contain' }}
             />
           ) : !thumbnailError && id ? (
             <img
               src={`${API_BASE_URL}/api/v1/cameras/${id}/thumbnail`}
               alt="Camera preview"
+              onLoad={handleStreamLoad}
               onError={() => setThumbnailError(true)}
               style={{ width: '100%', height: containerSize.height, objectFit: 'contain' }}
             />
@@ -239,8 +257,9 @@ export default function CameraDetailPage() {
             </div>
           )}
 
-          {/* Konva Zone Overlay */}
-          <Stage
+          {/* The live backend frame already contains zone annotations. Keep the
+              editable overlay out of the way while detection is running. */}
+          {!isRunning && <Stage
             width={containerSize.width}
             height={containerSize.height}
             style={{ position: 'absolute', top: 0, left: 0, cursor: editorMode === 'draw' ? 'crosshair' : 'default' }}
@@ -264,6 +283,13 @@ export default function CameraDetailPage() {
                   />
                 );
               })}
+
+              {/* Drag a vertex to reshape an existing zone. */}
+              {editorMode === 'view' && zones.flatMap((zone) => zone.polygon_points.map(([x, y], index) => (
+                <Circle key={`vertex-${zone.id}-${index}`} x={x * containerSize.width} y={y * containerSize.height}
+                  radius={5} fill={zone.color} stroke="white" strokeWidth={1} draggable
+                  onDragEnd={(event) => moveZoneVertex(zone, index, event.target.x(), event.target.y())} />
+              )))}
 
               {/* Zone labels */}
               {zones.map((zone) => {
@@ -310,10 +336,10 @@ export default function CameraDetailPage() {
                 />
               )}
             </Layer>
-          </Stage>
+          </Stage>}
 
           {/* Drawing toolbar */}
-          {editorMode === 'draw' && (
+          {!isRunning && editorMode === 'draw' && (
             <div style={{
               position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
               display: 'flex', gap: 8, padding: '8px 16px', background: 'var(--bg-overlay)',
@@ -336,17 +362,17 @@ export default function CameraDetailPage() {
           <div className="glass-card camera-sidebar-section">
             <h3>
               <Shield size={16} /> Zones
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ marginLeft: 'auto' }}
-                onClick={() => {
-                  setEditorMode(editorMode === 'draw' ? 'view' : 'draw');
-                  setDrawingPoints([]);
-                }}
-              >
-                {editorMode === 'draw' ? <Eye size={14} /> : <Pencil size={14} />}
-                {editorMode === 'draw' ? ' View' : ' Draw'}
-              </button>
+              {!isRunning && <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => {
+                    setEditorMode(editorMode === 'draw' ? 'view' : 'draw');
+                    setDrawingPoints([]);
+                  }}
+                >
+                  {editorMode === 'draw' ? <Eye size={14} /> : <Pencil size={14} />}
+                  {editorMode === 'draw' ? ' View' : ' Draw'}
+                </button>}
             </h3>
 
             {zones.length === 0 ? (
@@ -360,14 +386,17 @@ export default function CameraDetailPage() {
                     <div className="zone-color-dot" style={{ background: zone.color }} />
                     <span style={{ fontSize: '0.85rem' }}>{zone.name}</span>
                   </div>
-                  <div className="zone-item-actions">
+                  {!isRunning && <div className="zone-item-actions">
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditingZone(zone)} title="Edit zone">
+                      <Edit2 size={14} />
+                    </button>
                     <button
                       className="btn btn-ghost btn-icon btn-sm"
                       onClick={() => handleDeleteZone(zone.id)}
                     >
                       <Trash2 size={14} />
                     </button>
-                  </div>
+                  </div>}
                 </div>
               ))
             )}
@@ -454,8 +483,31 @@ export default function CameraDetailPage() {
           onSubmit={saveZone}
         />
       )}
+      {editingZone && <EditZoneModal zone={editingZone} onClose={() => setEditingZone(null)} onSubmit={async (data) => {
+        try { await updateZone(editingZone.id, data); toast.success('Zone updated'); setEditingZone(null); } catch { toast.error('Failed to update zone'); }
+      }} />}
     </div>
   );
+}
+
+function EditZoneModal({ zone, onClose, onSubmit }: { zone: Zone; onClose: () => void; onSubmit: (data: Partial<ZoneCreate>) => void }) {
+  const [name, setName] = useState(zone.name);
+  const [color, setColor] = useState(zone.color);
+  const [isActive, setIsActive] = useState(zone.is_active);
+  const [ruleType, setRuleType] = useState<Zone['rule_type']>(zone.rule_type);
+  const [dwell, setDwell] = useState(zone.dwell_threshold_seconds?.toString() ?? '60');
+  const [limit, setLimit] = useState(zone.occupancy_limit?.toString() ?? '3');
+  return <div className="modal-overlay" onClick={onClose}><div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-header"><h2>Edit zone</h2><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={18} /></button></div>
+    <div className="form-group"><label>Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
+    <div className="form-group"><label>Rule</label><select value={ruleType} onChange={(e) => setRuleType(e.target.value as Zone['rule_type'])}><option value="intrusion">Immediate intrusion</option><option value="loitering">Loitering</option><option value="occupancy_limit">Occupancy limit</option></select></div>
+    {ruleType === 'loitering' && <div className="form-group"><label>Loitering threshold (seconds)</label><input className="input" type="number" min="1" value={dwell} onChange={(e) => setDwell(e.target.value)} /></div>}
+    {ruleType === 'occupancy_limit' && <div className="form-group"><label>Maximum people before alert</label><input className="input" type="number" min="1" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>}
+    <div className="form-group"><label>Color</label><input className="input" type="color" value={color} onChange={(e) => setColor(e.target.value)} /></div>
+    <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Zone active</label>
+    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 12 }}>Drag the coloured vertices on the camera view to reshape this zone.</p>
+    <div className="modal-actions"><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={!name.trim()} onClick={() => onSubmit({ name, color, is_active: isActive, rule_type: ruleType, dwell_threshold_seconds: ruleType === 'loitering' ? Number(dwell) : null, occupancy_limit: ruleType === 'occupancy_limit' ? Number(limit) : null })}><Save size={16} /> Save</button></div>
+  </div></div>;
 }
 
 function AddZoneModal({

@@ -10,6 +10,10 @@ export interface Zone {
   color: string;
   alert_enabled: boolean;
   is_active: boolean;
+  rule_type: 'intrusion' | 'loitering' | 'occupancy_limit';
+  dwell_threshold_seconds: number | null;
+  occupancy_limit: number | null;
+  alert_cooldown_seconds: number;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +24,10 @@ export interface ZoneCreate {
   color?: string;
   alert_enabled?: boolean;
   is_active?: boolean;
+  rule_type?: 'intrusion' | 'loitering' | 'occupancy_limit';
+  dwell_threshold_seconds?: number | null;
+  occupancy_limit?: number | null;
+  alert_cooldown_seconds?: number;
 }
 
 export interface ZoneUpdate {
@@ -28,4 +36,8 @@ export interface ZoneUpdate {
   color?: string;
   alert_enabled?: boolean;
   is_active?: boolean;
+  rule_type?: 'intrusion' | 'loitering' | 'occupancy_limit';
+  dwell_threshold_seconds?: number | null;
+  occupancy_limit?: number | null;
+  alert_cooldown_seconds?: number;
 }

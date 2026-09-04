@@ -33,6 +33,8 @@ class ZoneEventType(Enum):
     ENTER = "ENTER"
     EXIT = "EXIT"
     PRESENT = "PRESENT"
+    LOITERING = "LOITERING"
+    OCCUPANCY_LIMIT = "OCCUPANCY_LIMIT"
 
 
 @dataclass
@@ -132,6 +134,10 @@ class ZoneDefinition:
     polygon: list[list[float]]  # [[x1,y1], [x2,y2], ...] normalized 0-1
     color: str = "#FF0000"
     is_active: bool = True
+    rule_type: str = "intrusion"
+    dwell_threshold_seconds: int | None = None
+    occupancy_limit: int | None = None
+    alert_cooldown_seconds: int = 60
 
 
 @dataclass

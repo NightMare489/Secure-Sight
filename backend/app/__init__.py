@@ -1,5 +1,5 @@
 """
-SchoolCV Backend Application Package.
+Secure Sight Backend Application Package.
 
 Zone-based person detection system with multi-camera support.
 """

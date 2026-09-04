@@ -67,7 +67,7 @@ class CLIDisplayCallback(IFrameCallback):
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="SchoolCV Core Engine Smoke Test"
+        description="Secure Sight Core Engine Smoke Test"
     )
     parser.add_argument(
         "--video",
@@ -166,7 +166,7 @@ def main() -> None:
     try:
         while callback.running:
             if callback.latest_frame is not None:
-                cv2.imshow("SchoolCV Smoke Test", callback.latest_frame)
+                cv2.imshow("Secure Sight Smoke Test", callback.latest_frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):

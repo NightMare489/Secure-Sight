@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import Boolean, Column, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -44,6 +44,10 @@ class Zone(Base, UUIDMixin, TimestampMixin):
     color = Column(String(7), nullable=False, default="#FF0000")
     alert_enabled = Column(Boolean, nullable=False, default=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    rule_type = Column(String(20), nullable=False, default="intrusion")
+    dwell_threshold_seconds = Column(Integer, nullable=True)
+    occupancy_limit = Column(Integer, nullable=True)
+    alert_cooldown_seconds = Column(Integer, nullable=False, default=60)
 
     # Relationships
     camera = relationship("Camera", back_populates="zones")

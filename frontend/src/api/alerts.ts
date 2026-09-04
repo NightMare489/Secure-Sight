@@ -20,4 +20,12 @@ export const alertsApi = {
     const { data } = await apiClient.get('/alerts/recent', { params: { limit } });
     return data.alerts;
   },
+
+  acknowledge: async (id: string, acknowledged: boolean, note?: string): Promise<Alert> => {
+    const { data } = await apiClient.put(`/alerts/${id}/acknowledge`, { acknowledged, note });
+    return data;
+  },
+
+  snapshotUrl: (id: string): string => `${apiClient.defaults.baseURL}/alerts/${id}/snapshot`,
+  clipUrl: (id: string): string => `${apiClient.defaults.baseURL}/alerts/${id}/clip`,
 };

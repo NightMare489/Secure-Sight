@@ -40,6 +40,8 @@ def create_app(config: AppConfig | None = None) -> Flask:
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SQLALCHEMY_ECHO"] = config.database.echo
     app.config["SNAPSHOTS_DIR"] = config.snapshots_dir
+    app.config["CLIPS_DIR"] = config.clips_dir
+    app.config["GEMINI_CONFIG"] = config.gemini
 
     # Initialize extensions
     _init_extensions(app, config)

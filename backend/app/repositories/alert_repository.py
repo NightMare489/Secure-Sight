@@ -37,6 +37,7 @@ class AlertRepository(BaseRepository[Alert]):
         end_time: Optional[datetime] = None,
         page: int = 1,
         per_page: int = 50,
+        acknowledged: Optional[bool] = None,
     ) -> tuple[list[Alert], int]:
         """
         Get alerts with filtering and pagination.
@@ -65,6 +66,8 @@ class AlertRepository(BaseRepository[Alert]):
             query = query.filter(Alert.timestamp >= start_time)
         if end_time:
             query = query.filter(Alert.timestamp <= end_time)
+        if acknowledged is not None:
+            query = query.filter(Alert.acknowledged == acknowledged)
 
         total = query.count()
 
