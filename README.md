@@ -12,10 +12,7 @@ through a read-only Analytics Copilot.
 
 The system is domain-agnostic — it was originally prototyped for school
 corridors, but nothing in the pipeline is school-specific. It applies
-equally to offices, retail floors, warehouses, and campuses. A full
-technical writeup — architecture, exact operating parameters, and a
-comparison against similar systems — is in
-[`SecureSight_manuscript.pdf`](SecureSight_manuscript.pdf).
+equally to offices, retail floors, warehouses, and campuses.
 
 ## Screenshots
 
